@@ -19,55 +19,6 @@ end
     thread_scope_simdgroup = 4
 end
 
-# Keep availability checks in device code so target constants can propagate and
-# enclosing `metal_version()` guards can eliminate unavailable operations.
-@inline function check_atomic_memory_order(::Val{order}) where {order}
-    if order === memory_order_relaxed
-        return
-    elseif order === memory_order_acquire
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_acquire requires Metal 4.1 or newer.")
-    elseif order === memory_order_release
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_release requires Metal 4.1 or newer.")
-    elseif order === memory_order_acq_rel
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_acq_rel requires Metal 4.1 or newer.")
-    elseif order === memory_order_seq_cst
-        @static_assert(metal_version() >= sv"4.1",
-                       "Atomic memory_order_seq_cst requires Metal 4.1 or newer.")
-    else
-        @static_assert(false, "Invalid atomic memory ordering.")
-    end
-    return
-end
-
-@inline function check_atomic_flags()
-    @static_assert(metal_version() >= sv"4.1",
-                   "Atomic memory flags require Metal 4.1 or newer.")
-    return
-end
-
-@inline function check_atomic_thread_fence_order(::Val{order}) where {order}
-    @static_assert(metal_version() >= sv"3.2",
-                   "atomic_thread_fence requires Metal 3.2 or newer.")
-    if order === memory_order_relaxed || order === memory_order_seq_cst
-        return
-    elseif order === memory_order_acquire
-        @static_assert(metal_version() >= sv"4.1",
-                       "atomic_thread_fence memory_order_acquire requires Metal 4.1 or newer.")
-    elseif order === memory_order_release
-        @static_assert(metal_version() >= sv"4.1",
-                       "atomic_thread_fence memory_order_release requires Metal 4.1 or newer.")
-    elseif order === memory_order_acq_rel
-        @static_assert(metal_version() >= sv"4.1",
-                       "atomic_thread_fence memory_order_acq_rel requires Metal 4.1 or newer.")
-    else
-        @static_assert(false, "Invalid atomic memory ordering.")
-    end
-    return
-end
-
 """
     MemoryFlags
 
@@ -111,7 +62,11 @@ end
 
 @device_function @inline function atomic_thread_fence(flags::Val{F}, order::Val{O},
                                                        scope::Val{S}) where {F,O,S}
-    check_atomic_thread_fence_order(order)
+    @static_assert(metal_version() >= sv"3.2",
+                   "atomic_thread_fence requires Metal 3.2 or newer.")
+    @static_assert(O isa memory_order, "Invalid atomic memory ordering.")
+    @static_assert(O === memory_order_relaxed || O === memory_order_seq_cst || metal_version() >= sv"4.1",
+                   "Acquire, release, and acquire-release atomic_thread_fence orderings require Metal 4.1 or newer.")
     @static_assert(S isa thread_scope, "Invalid atomic thread scope.")
     @typed_ccall("air.atomic.fence", llvmcall, Nothing, (Int32, Int32, Int32),
                  flags, order, scope)

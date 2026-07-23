@@ -14,6 +14,35 @@ const atomic_type_names = Dict(
     :Float32 => "f32"
 )
 
+# Keep availability checks in device code so target constants can propagate and
+# enclosing `metal_version()` guards can eliminate unavailable operations.
+@inline function check_atomic_memory_order(::Val{order}) where {order}
+    if order === memory_order_relaxed
+        return
+    elseif order === memory_order_acquire
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_acquire requires Metal 4.1 or newer.")
+    elseif order === memory_order_release
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_release requires Metal 4.1 or newer.")
+    elseif order === memory_order_acq_rel
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_acq_rel requires Metal 4.1 or newer.")
+    elseif order === memory_order_seq_cst
+        @static_assert(metal_version() >= sv"4.1",
+                       "Atomic memory_order_seq_cst requires Metal 4.1 or newer.")
+    else
+        @static_assert(false, "Invalid atomic memory ordering.")
+    end
+    return
+end
+
+@inline function check_atomic_flags()
+    @static_assert(metal_version() >= sv"4.1",
+                   "Atomic memory flags require Metal 4.1 or newer.")
+    return
+end
+
 
 ## low-level functions
 for typ in (:Int32, :UInt32), as in (AS.Device, AS.ThreadGroup)
